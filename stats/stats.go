@@ -14,7 +14,6 @@ type Item struct {
 }
 type ItemList []Item
 
-//
 type DataMap map[int]map[string]map[interface{}]int64 // Code / Category / Key / Count
 type DataRank map[int]map[string]ItemList        // Code / Category / Key / Ranking
 

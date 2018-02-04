@@ -48,22 +48,4 @@ func GetMemberAssets() (map[int][]int, error) {
 	}
 	return assets, nil
 }
-//
-//type Md5Hash struct {
-//	Md5      string
-//	Score    int
-//	Judge    int
-//	Filetype int
-//	Category int
-//	Ext1     int
-//	Ext2     int
-//	Ext3     int
-//	Filesize uint64
-//	Rdate    time.Time
-//	Udate    time.Time
-//}
-
-
-
-
 

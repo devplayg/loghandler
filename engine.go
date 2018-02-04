@@ -45,7 +45,6 @@ type Engine struct {
 }
 
 func NewEngine(appName string, debug bool, cpuCount int, interval int64, verbose bool) *Engine {
-
 	e := Engine{
 		appName:     appName,
 		processName: strings.TrimSuffix(filepath.Base(os.Args[0]), filepath.Ext(os.Args[0])),
@@ -81,7 +80,6 @@ func (e *Engine) Start() error {
 }
 
 func (e *Engine) initLogger(verbose bool) error {
-
 	// Set log format
 	log.SetFormatter(&log.TextFormatter{
 		ForceColors:   true,
@@ -217,7 +215,8 @@ func UpdateConfig(section, keyword, value string) error {
 	query := `
 		insert into sys_config(section, keyword, value, udate)
 		values (?, ?, ?, now())
-		on duplicate key update value = values(value), udate = values(udate)`
+		on duplicate key update value = values(value), udate = values(udate)
+	`
 	_, err := o.Raw(query, section, keyword, value).Exec()
 
 	return err

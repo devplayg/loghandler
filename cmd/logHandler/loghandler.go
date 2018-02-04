@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	AppName    = "loghandler"
-	AppVersion = "1.0"
+	AppName    = "M-Server LogHandler"
+	AppVersion = "1.0.1802.10401"
 )
 
 func main() {
@@ -66,7 +66,7 @@ func main() {
 					Mark: t.Format(mserver.DateDefault),
 				}
 
-				log.Debugf("Start calulating statistics (%s ~ %s)", date.From, date.To)
+				log.Debugf("Start calculating statistics (%s ~ %s)", date.From, date.To)
 				wg := new(sync.WaitGroup)
 
 				// Command generation of statistics
@@ -80,7 +80,7 @@ func main() {
 				wg.Wait()
 
 				// Finish statistics
-				log.Debug("End of calculating statistics")
+				log.Debugf("End of calculating statistics (Execution time: %3.1fs)", time.Now().Sub(t).Seconds())
 
 				// - Update time
 				err := mserver.UpdateConfig("stats", "last_update", date.Mark)
@@ -100,8 +100,11 @@ func main() {
 			}
 
 		}()
-		go http.ListenAndServe(engine.Config["server.addr"], router)
-		log.Debugf("HTTP server started. Listen: %s", engine.Config["server.addr"])
+
+		if len(engine.Config["server.addr"]) > 0 {
+			go http.ListenAndServe(engine.Config["server.addr"], router)
+			log.Debugf("HTTP server started. Listen: %s", engine.Config["server.addr"])
+		}
 
 		// Wait for signal
 		log.Debug("Waiting for signal..")
