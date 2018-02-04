@@ -8,12 +8,6 @@ import (
 	"sync"
 )
 
-//type LogHandler interface {
-//	Start() error
-//	GetName() string
-//	GetLogs() []stats.ItemList
-//}
-
 type StatsDate struct {
 	From string
 	To   string
@@ -33,25 +27,3 @@ type EventLogHandler struct {
 	o            orm.Ormer
 	date         *StatsDate
 }
-
-//import (
-//	"github.com/gorilla/mux"
-//	"sync"
-//	"time"
-//"github.com/astaxie/beego/orm"
-//	"github.com/devplayg/loghandler/statistics"
-//)
-//
-//type LogHandler struct {
-//	o            orm.Ormer
-//	t            time.Time
-//	name   string
-//	Engine *Engine
-//	dataMap      statistics.DataMap
-//	_rank        statistics.DataRank
-//	rank         statistics.DataRank
-//	memberAssets map[int][]int
-//	mutex        *sync.RWMutex
-//	Router *mux.Router
-//}
-//

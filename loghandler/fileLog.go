@@ -10,7 +10,10 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
+	"net/http"
 	"time"
+	"encoding/json"
+	"strconv"
 )
 
 const (
@@ -105,7 +108,7 @@ func (f *FileLogHandler) Start(date *StatsDate, wg *sync.WaitGroup) error {
 		)
 	}()
 
-	//h.addRoute()
+	f.AddRoute()
 	return nil
 }
 
@@ -170,9 +173,13 @@ func (f *FileLogHandler) produceStats() error {
 	// Determine rankings
 	for id, m := range f.dataMap {
 		for category, data := range m {
-			f._rank[id][category] = stats.DetermineRankings(data, 5)
+			f._rank[id][category] = stats.DetermineRankings(data, 300)
 		}
 	}
+
+	f.mutex.Lock()
+	f.rank = f._rank
+	f.mutex.Unlock()
 
 	return nil
 }
@@ -342,6 +349,47 @@ func (f *FileLogHandler) RemoveSpecificStats(date string) error {
 	}
 
 	return nil
+}
+
+
+func (f *FileLogHandler) rankAll(w http.ResponseWriter, r *http.Request) {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	buf, _ := json.Marshal(f.rank)
+	w.Write(buf)
+}
+
+func (f *FileLogHandler) rankHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+
+	groupId, _ := strconv.Atoi(vars["groupId"])
+	top, _ := strconv.Atoi(vars["top"])
+
+	list := f.getRank(groupId, vars["category"], top)
+	buf, _ := json.Marshal(list)
+	w.Write(buf)
+}
+
+func (f *FileLogHandler) getRank(groupId int, category string, top int) stats.ItemList {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+
+	if _, ok := f.rank[groupId]; ok {
+		if list, ok2 := f.rank[groupId][category]; ok2 {
+			if top > 0 && len(list) > top {
+				return list[:top]
+			} else {
+				return list
+			}
+		}
+	}
+	return nil
+}
+
+func (f *FileLogHandler) AddRoute() {
+	f.r.HandleFunc("/rank/{groupId:-?[0-9]+}/{category}/{top:[0-9]+}", f.rankHandler)
+	f.r.HandleFunc("/rank", f.rankAll)
 }
 
 func NewNetworkLogHandler(engine *mserver.Engine, router *mux.Router) *NetworkLogHandler {

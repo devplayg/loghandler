@@ -2,15 +2,15 @@ package main
 
 import (
 	"github.com/devplayg/mserver"
-	//"github.com/gorilla/mux"
-	log "github.com/sirupsen/logrus"
-	//"net/http"
 	"github.com/devplayg/mserver/loghandler"
+	log "github.com/sirupsen/logrus"
 	_ "net/http/pprof"
 	"os"
 	"strings"
 	"sync"
 	"time"
+	"github.com/gorilla/mux"
+	"net/http"
 )
 
 const (
@@ -43,6 +43,7 @@ func main() {
 		engine.SetConfig("server.addr")
 		return
 	}
+
 	// Start engine
 	if err := engine.Start(); err != nil {
 		log.Error(err)
@@ -50,36 +51,12 @@ func main() {
 	}
 	log.Debug("engine started")
 
-	if len(*manual) > 0 { // Manual(Previous day(s)
-		fileLog := loghandler.NewFileLogHandler(engine, nil)
-		date, c, err := getManualDate(*manual)
-		if err != nil {
-			log.Error(err)
-			return
-		}
+	if *manual == "" { // Manual(Previous day(s)
+		router := mux.NewRouter()
+		router.PathPrefix("/debug").Handler(http.DefaultServeMux)
 
-		if c == 1 {
-			fileLog.RemoveOldStats(date)
-		} else if c == 3 {
-			fileLog.RemoveSpecificStats(date.Mark)
-		}
-
-		log.Debugf("Start calulating statistics (%s ~ %s, Mark as %s)", date.From, date.To, date.Mark)
-		wg := new(sync.WaitGroup)
-
-		// Command generation of statistics
-		wg.Add(1)
-		fileLog.Start(date, wg)
-
-		// Waiting for complete
-		wg.Wait()
-
-		// Finish statistics
-		log.Debug("End of calulating statistics")
-
-	} else { // Today's statistics
 		go func() {
-			fileLog := loghandler.NewFileLogHandler(engine, nil)
+			fileLog := loghandler.NewFileLogHandler(engine, router)
 
 			for {
 				t := time.Now()
@@ -95,6 +72,9 @@ func main() {
 				// Command generation of statistics
 				wg.Add(1)
 				fileLog.Start(date, wg)
+
+				// Add route(fix comment!)
+				fileLog.AddRoute()
 
 				// Waiting for complete
 				wg.Wait()
@@ -120,12 +100,39 @@ func main() {
 			}
 
 		}()
-		//go http.ListenAndServe(engine.Config["server.addr"], router)
-		//log.Debugf("HTTP server started. Listen: %s", engine.Config["server.addr"])
-		//
+		go http.ListenAndServe(engine.Config["server.addr"], router)
+		log.Debugf("HTTP server started. Listen: %s", engine.Config["server.addr"])
+
 		// Wait for signal
 		log.Debug("Waiting for signal..")
 		mserver.WaitForSignals()
+
+	} else { // Today's statistics
+		fileLog := loghandler.NewFileLogHandler(engine, nil)
+		date, c, err := getManualDate(*manual)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+
+		if c == 1 {
+			fileLog.RemoveOldStats(date)
+		} else if c == 3 {
+			fileLog.RemoveSpecificStats(date.Mark)
+		}
+
+		log.Debugf("Start calulating statistics (%s ~ %s, Mark as %s)", date.From, date.To, date.Mark)
+		wg := new(sync.WaitGroup)
+
+		// Command generation of statistics
+		wg.Add(1)
+		fileLog.Start(date, wg)
+
+		// Waiting for complete
+		wg.Wait()
+
+		// Finish statistics
+		log.Debug("End of calulating statistics")
 
 	}
 }
@@ -163,12 +170,3 @@ func getManualDate(str string) (*loghandler.StatsDate, int, error) {
 
 	return &date, len(parsed), nil
 }
-
-//
-//func startLogHandler(handler loghandler.LogHandler) error {
-//	if err := handler.Start(); err != nil {
-//		return err
-//	}
-//	log.Infof("Statistics(%s) started", handler.GetName())
-//	return nil
-//}
