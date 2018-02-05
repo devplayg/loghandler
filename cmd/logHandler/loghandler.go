@@ -49,7 +49,6 @@ func main() {
 		log.Error(err)
 		return
 	}
-	log.Debug("engine started")
 
 	if *manual == "" { // Manual(Previous day(s)
 		router := mux.NewRouter()

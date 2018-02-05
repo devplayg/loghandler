@@ -74,6 +74,7 @@ func (e *Engine) Start() error {
 		return err
 	}
 
+	log.Debug("Engine started")
 	runtime.GOMAXPROCS(e.cpuCount)
 	log.Debugf("GOMAXPROCS set to %d", runtime.GOMAXPROCS(0))
 	return nil

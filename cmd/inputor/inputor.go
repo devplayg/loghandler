@@ -46,7 +46,6 @@ func main() {
 	// Start application
 	app := inputor.NewInputor(engine)
 	app.Start()
-	log.Info("Started")
 
 	// Wait for signal
 	mserver.WaitForSignals()

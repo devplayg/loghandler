@@ -1,6 +1,7 @@
 package loghandler
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/astaxie/beego/orm"
 	"github.com/devplayg/mserver"
@@ -8,12 +9,11 @@ import (
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
-	"os"
-	"sync"
 	"net/http"
-	"time"
-	"encoding/json"
+	"os"
 	"strconv"
+	"sync"
+	"time"
 )
 
 const (
@@ -36,7 +36,11 @@ type FileLog struct {
 	Md5            string
 	MailSender     string
 	MailRecipient  string
-	Filename       string
+	FileName           string
+	MalCategory    int
+	FileType       int
+	FileSize       int
+	FileJudge      int
 	Score          int
 }
 
@@ -120,6 +124,7 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 	query := `
 		select 	t.rdate,
 				(sensor_id + 100000) sensor_id,
+				from_unixtime(unix_timestamp(t.rdate) - (unix_timestamp(t.rdate) % 600)) every10min,
 				trans_type,
 				ippool_src_gcode,
 				ippool_src_ocode,
@@ -131,13 +136,21 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 				dst_port,
 				dst_country,
 				domain,
-				url,
-				t.filesize,
-				filename,
+				concat(domain, url) url,
+				ifnull(t1.filesize, 0) file_size,
+				ifnull(t1.filetype, 0) file_type,
+				ifnull(t.trans_type, 0) trans_type,
+				ifnull(t1.category, 0) mal_category,
+				filename,				
 				t.md5,
 				mail_sender,
 				mail_recipient,
-				score
+				score,
+				case
+					when t1.score = 100 then 1
+					when t1.score < 100 and t1.score >= 40 then 2
+					else 2
+				end file_judge
 		from log_event_filetrans t left outer join pol_file_md5 t1 on t1.md5 = t.md5
 		where t.rdate >= ? and t.rdate <= ?
 	`
@@ -168,6 +181,13 @@ func (f *FileLogHandler) produceStats() error {
 		f.addToStats(&r, "srcip", r.SrcIp, false)
 		f.addToStats(&r, "dstip", r.DstIp, false)
 		f.addToStats(&r, "md5", r.Md5, false)
+		f.addToStats(&r, "dstcountry", r.DstCountry, false)
+		f.addToStats(&r, "dstdomain", r.Domain, false)
+		f.addToStats(&r, "dsturi", r.Url, false)
+		f.addToStats(&r, "transtype", r.TransType, false)
+		f.addToStats(&r, "filetype", r.FileType, false)
+		f.addToStats(&r, "malcategory", r.MalCategory, false)
+		f.addToStats(&r, "filejudge", r.FileJudge, false)
 	}
 
 	// Determine rankings
@@ -350,7 +370,6 @@ func (f *FileLogHandler) RemoveSpecificStats(date string) error {
 
 	return nil
 }
-
 
 func (f *FileLogHandler) rankAll(w http.ResponseWriter, r *http.Request) {
 	f.mutex.RLock()
