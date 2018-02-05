@@ -90,16 +90,19 @@ func (e *Engine) initLogger(verbose bool) error {
 	// Set log level
 	if e.debug {
 		log.SetLevel(log.DebugLevel)
+		orm.Debug = true
 	}
 
 	if verbose {
 		e.logOutput = 0
 		log.SetOutput(os.Stdout)
+		orm.DebugLog = orm.NewLog(os.Stdout)
 	} else {
 		var logFile string
 		if e.debug {
 			logFile = filepath.Join(filepath.Dir(os.Args[0]), e.processName+"-debug.log")
 			os.Remove(logFile)
+
 		} else {
 			logFile = filepath.Join(filepath.Dir(os.Args[0]), e.processName+".log")
 		}
@@ -108,9 +111,11 @@ func (e *Engine) initLogger(verbose bool) error {
 		if err == nil {
 			log.SetOutput(file)
 			e.logOutput = 1
+			orm.DebugLog = orm.NewLog(file)
 		} else {
 			e.logOutput = 0
 			log.SetOutput(os.Stdout)
+			orm.DebugLog = orm.NewLog(os.Stdout)
 		}
 	}
 

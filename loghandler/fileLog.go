@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"strings"
 )
 
 const (
@@ -48,7 +49,7 @@ type FileLogHandler EventLogHandler
 type NetworkLogHandler EventLogHandler
 type AgentLogHandler EventLogHandler
 
-var tables = []string{"md5", "srcip", "dstip"}
+var tables string = "srcip,dstip,md5,dstcountry,dstdomain,dsturi,transtype,filetype,malcategory,filejudge"
 
 func NewFileLogHandler(engine *mserver.Engine, router *mux.Router) *FileLogHandler {
 	return &FileLogHandler{
@@ -149,7 +150,7 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 				case
 					when t1.score = 100 then 1
 					when t1.score < 100 and t1.score >= 40 then 2
-					else 2
+					else 3
 				end file_judge
 		from log_event_filetrans t left outer join pol_file_md5 t1 on t1.md5 = t.md5
 		where t.rdate >= ? and t.rdate <= ?
@@ -308,7 +309,7 @@ func (f *FileLogHandler) RemoveJustBeforeStats() error {
 	o := orm.NewOrm()
 	query1 := "delete from stat_%s where (rdate >= ? and rdate <= ?) and rdate <> ?"
 	query2 := "delete from stat_%s_mal where (rdate >= ? and rdate <= ?) and rdate <> ?"
-	for _, tb := range tables {
+	for _, tb := range strings.Split(tables, ",") {
 		q1 := fmt.Sprintf(query1, tb)
 		_, err := o.Raw(q1, f.date.From, f.date.To, f.date.Mark).Exec()
 		if err != nil {
@@ -331,7 +332,7 @@ func (f *FileLogHandler) RemoveOldStats(date *StatsDate) error {
 	o := orm.NewOrm()
 	query1 := "delete from stat_%s where rdate >= ? and rdate <= ?"
 	query2 := "delete from stat_%s_mal where rdate >= ? and rdate <= ?"
-	for _, tb := range tables {
+	for _, tb := range strings.Split(tables, ",") {
 		q1 := fmt.Sprintf(query1, tb)
 		_, err := o.Raw(q1, date.From, date.To).Exec()
 		if err != nil {
@@ -354,7 +355,7 @@ func (f *FileLogHandler) RemoveSpecificStats(date string) error {
 	o := orm.NewOrm()
 	query1 := "delete from stat_%s where rdate = ?"
 	query2 := "delete from stat_%s_mal where rdate = ?"
-	for _, tb := range tables {
+	for _, tb := range strings.Split(tables, ",") {
 		q1 := fmt.Sprintf(query1, tb)
 		_, err := o.Raw(q1, date).Exec()
 		if err != nil {
