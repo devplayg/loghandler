@@ -26,4 +26,5 @@ type EventLogHandler struct {
 	r            *mux.Router
 	o            orm.Ormer
 	date         *StatsDate
+	top          int
 }

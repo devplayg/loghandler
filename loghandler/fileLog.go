@@ -12,9 +12,9 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 )
 
 const (
@@ -37,7 +37,7 @@ type FileLog struct {
 	Md5            string
 	MailSender     string
 	MailRecipient  string
-	FileName           string
+	FileName       string
 	MalCategory    int
 	FileType       int
 	FileSize       int
@@ -51,12 +51,13 @@ type AgentLogHandler EventLogHandler
 
 var tables string = "srcip,dstip,md5,dstcountry,dstdomain,dsturi,transtype,filetype,malcategory,filejudge"
 
-func NewFileLogHandler(engine *mserver.Engine, router *mux.Router) *FileLogHandler {
+func NewFileLogHandler(engine *mserver.Engine, router *mux.Router, top int) *FileLogHandler {
 	return &FileLogHandler{
 		name:   "file",
 		engine: engine,
 		r:      router,
 		mutex:  new(sync.RWMutex),
+		top:    top,
 	}
 }
 
@@ -113,7 +114,9 @@ func (f *FileLogHandler) Start(date *StatsDate, wg *sync.WaitGroup) error {
 		)
 	}()
 
-	f.AddRoute()
+	if f.r != nil {
+		f.AddRoute()
+	}
 	return nil
 }
 
@@ -194,7 +197,11 @@ func (f *FileLogHandler) produceStats() error {
 	// Determine rankings
 	for id, m := range f.dataMap {
 		for category, data := range m {
-			f._rank[id][category] = stats.DetermineRankings(data, 300)
+			if strings.HasSuffix(category, "_mal") {
+				f._rank[id][category] = stats.DetermineRankings(data, 0)
+			} else {
+				f._rank[id][category] = stats.DetermineRankings(data, f.top)
+			}
 		}
 	}
 

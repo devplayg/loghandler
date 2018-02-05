@@ -3,19 +3,22 @@ package main
 import (
 	"github.com/devplayg/mserver"
 	"github.com/devplayg/mserver/loghandler"
+	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"strings"
 	"sync"
 	"time"
-	"github.com/gorilla/mux"
-	"net/http"
 )
 
 const (
 	AppName    = "M-Server LogHandler"
 	AppVersion = "1.0.1802.10401"
+	Sensor     = 1
+	Group      = 2
+	Ippool     = 3
 )
 
 func main() {
@@ -27,6 +30,7 @@ func main() {
 		setConfig = mserver.CmdFlags.Bool("config", false, "Edit configurations")
 		interval  = mserver.CmdFlags.Int64("i", 15000, "Interval(ms)")
 		manual    = mserver.CmdFlags.String("manual", "", "StartDate,EndDate,MarkDate")
+		top       = mserver.CmdFlags.Int("top", 100, "Top N")
 	)
 	mserver.CmdFlags.Usage = mserver.PrintHelp
 	mserver.CmdFlags.Parse(os.Args[1:])
@@ -50,12 +54,12 @@ func main() {
 		return
 	}
 
-	if *manual == "" { // Manual(Previous day(s)
+	if *manual == "" { // Today's statistics
 		router := mux.NewRouter()
 		router.PathPrefix("/debug").Handler(http.DefaultServeMux)
 
 		go func() {
-			fileLog := loghandler.NewFileLogHandler(engine, router)
+			fileLog := loghandler.NewFileLogHandler(engine, router, *top)
 
 			for {
 				t := time.Now()
@@ -109,8 +113,8 @@ func main() {
 		log.Debug("Waiting for signal..")
 		mserver.WaitForSignals()
 
-	} else { // Today's statistics
-		fileLog := loghandler.NewFileLogHandler(engine, nil)
+	} else { // Before
+		fileLog := loghandler.NewFileLogHandler(engine, nil, *top)
 		date, c, err := getManualDate(*manual)
 		if err != nil {
 			log.Error(err)
@@ -145,7 +149,6 @@ func getManualDate(str string) (*loghandler.StatsDate, int, error) {
 	parsed := strings.Split(str, ",")
 	if len(parsed) == 1 {
 		t, err := time.Parse("2006-01-02", parsed[0])
-		log.Debug(t)
 		if err != nil {
 			return nil, len(parsed), err
 		}

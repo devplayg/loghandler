@@ -67,7 +67,6 @@ func (e *Engine) Start() error {
 	if _, ok := e.Config["db.hostname"]; !ok {
 		return errors.New("invalid configurations")
 	}
-	log.Debug(e.Config)
 
 	err = e.initDatabase()
 	if err != nil {
@@ -186,10 +185,6 @@ func (e *Engine) SetConfig(extra string) error {
 	}
 
 	return err
-}
-
-func (e *Engine) testConfig(extra string) error {
-	return nil
 }
 
 func (e *Engine) readInput(key string, config map[string]string) {
