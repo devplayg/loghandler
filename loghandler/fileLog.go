@@ -30,30 +30,31 @@ const (
 )
 
 type FileLog struct {
-	Rdate          time.Time
-	SensorId       int
-	IppoolSrcGcode int
-	IppoolSrcOcode int
-	TransType      int
-	SrcIp          uint32
-	SrcPort        int
-	DstIp          uint32
-	DstPort        int
-	DstCountry     string
-	Domain         string
-	Url            string
-	Md5            string
-	MailSender     string
-	MailRecipient  string
-	FileName       string
-	MalCategory    int
-	FileType       int
-	FileSize       int
-	FileJudge      int
-	Score          int
-	LogId          string
-	IpMesh         string
-	IpClassMesh    string
+	Rdate                 time.Time
+	SensorId              int
+	IppoolSrcGcode        int
+	IppoolSrcOcode        int
+	TransType             int
+	SrcIp                 uint32
+	SrcPort               int
+	DstIp                 uint32
+	DstPort               int
+	DstCountry            string
+	Domain                string
+	Url                   string
+	Md5                   string
+	MailSender            string
+	MailRecipient         string
+	FileName              string
+	MalCategory           int
+	FileType              int
+	FileSize              int
+	FileJudge             int
+	Score                 int
+	LogId                 string
+	SrcIpToDstIpMesh      string
+	SrcIpToDomainMesh     string
+	SrcIpClassToDstIpMesh string
 }
 
 type FileLogHandler EventLogHandler
@@ -164,12 +165,14 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 					when t1.score < 100 and t1.score >= 40 then 2
 					else 3
 				end file_judge,
-				concat(INET_NTOA(INET_ATON( inet_ntoa(src_ip) ) & 4294967040), '/', domain) ip_class_mesh, 
-				concat(inet_ntoa(src_ip), '/', inet_ntoa(dst_ip)) ip_mesh,
+				concat(inet_ntoa(src_ip), '/', inet_ntoa(dst_ip)) src_ip_to_dst_ip_mesh,
+				concat(INET_NTOA(INET_ATON( inet_ntoa(src_ip) ) & 4294967040), '/', domain) src_ip_to_domain_mesh,
+				concat(INET_NTOA(INET_ATON( inet_ntoa(src_ip) ) & 4294967040), '/', inet_ntoa(dst_ip)) src_ip_class_to_dst_ip_mesh,
 				from_unixtime(unix_timestamp(t.rdate) - (unix_timestamp(t.rdate) % 600)) every10min
 		from log_filetrans t left outer join pol_file_md5 t1 on t1.md5 = t.md5
 		where t.rdate >= ? and t.rdate <= ?
 	`
+
 	var rows []FileLog
 	o := orm.NewOrm()
 	_, err := o.Raw(query, f.date.From, f.date.To).QueryRows(&rows)
@@ -202,11 +205,12 @@ func (f *FileLogHandler) produceStats() error {
 		f.calStats(&r, "malcategory", r.MalCategory, StatsNormal|StatsMalware)
 		f.calStats(&r, "filejudge", r.FileJudge, StatsNormal|StatsMalware)
 		f.calStats(&r, "dstcountry", r.DstCountry, StatsNormal|StatsMalware)
+		f.calStats(&r, "ipmesh", r.SrcIpToDstIpMesh, StatsMalware)
+		f.calStats(&r, "ipclassmesh", r.SrcIpClassToDstIpMesh, StatsNormal)
 		if r.TransType == HTTP || r.TransType == FTP {
 			f.calStats(&r, "dstdomain", r.Domain, StatsNormal|StatsMalware)
 			f.calStats(&r, "dsturi", r.Url, StatsNormal|StatsMalware)
-			f.calStats(&r, "ipmesh", r.IpMesh, StatsMalware)
-			f.calStats(&r, "ipclassmesh", r.IpClassMesh, StatsNormal)
+			f.calStats(&r, "ipmesh", r.SrcIpToDomainMesh, StatsNormal|StatsMalware)
 		}
 	}
 
