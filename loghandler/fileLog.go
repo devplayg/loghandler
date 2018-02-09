@@ -19,6 +19,10 @@ import (
 
 const (
 	RootId = -1
+	POP3 = 1
+	SMTP = 2
+	HTTP = 3
+	FTP = 4
 )
 
 type FileLog struct {
@@ -43,6 +47,7 @@ type FileLog struct {
 	FileSize       int
 	FileJudge      int
 	Score          int
+	LogId          string
 }
 
 type FileLogHandler EventLogHandler
@@ -132,7 +137,9 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 				trans_type,
 				ippool_src_gcode,
 				ippool_src_ocode,
-				session_id,
+				ifnull(t.trans_type, 0) trans_type,
+				t.md5,
+				log_id,
 				src_ip,
 				src_port,
 				src_country,
@@ -142,11 +149,9 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 				domain,
 				concat(domain, url) url,
 				ifnull(t1.filesize, 0) file_size,
-				ifnull(t1.filetype, 0) file_type,
-				ifnull(t.trans_type, 0) trans_type,
+				ifnull(t1.filetype, 0) file_type,				
 				ifnull(t1.category, 0) mal_category,
-				filename,				
-				t.md5,
+				filename,								
 				mail_sender,
 				mail_recipient,
 				score,
@@ -155,7 +160,7 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 					when t1.score < 100 and t1.score >= 40 then 2
 					else 3
 				end file_judge
-		from log_event_filetrans t left outer join pol_file_md5 t1 on t1.md5 = t.md5
+		from log_filetrans t left outer join pol_file_md5 t1 on t1.md5 = t.md5
 		where t.rdate >= ? and t.rdate <= ?
 	`
 	var rows []FileLog
@@ -185,13 +190,15 @@ func (f *FileLogHandler) produceStats() error {
 		f.addToStats(&r, "srcip", r.SrcIp, false)
 		f.addToStats(&r, "dstip", r.DstIp, false)
 		f.addToStats(&r, "md5", r.Md5, false)
-		f.addToStats(&r, "dstcountry", r.DstCountry, false)
-		f.addToStats(&r, "dstdomain", r.Domain, false)
-		f.addToStats(&r, "dsturi", r.Url, false)
 		f.addToStats(&r, "transtype", r.TransType, false)
 		f.addToStats(&r, "filetype", r.FileType, false)
 		f.addToStats(&r, "malcategory", r.MalCategory, false)
 		f.addToStats(&r, "filejudge", r.FileJudge, false)
+		f.addToStats(&r, "dstcountry", r.DstCountry, false)
+		if r.TransType == HTTP || r.TransType == FTP {
+			f.addToStats(&r, "dstdomain", r.Domain, false)
+			f.addToStats(&r, "dsturi", r.Url, false)
+		}
 	}
 
 	// Determine rankings
@@ -289,8 +296,8 @@ func (f *FileLogHandler) insert() error {
 				fm[category] = tempFile
 			}
 
-			for i, item := range list {
-				str := fmt.Sprintf("%s\t%d\t%v\t%d\t%d\n", f.date.Mark, id, item.Key, item.Count, i+1)
+			for _, item := range list {
+				str := fmt.Sprintf("%s\t%d\t%v\t%d\n", f.date.Mark, id, item.Key, item.Count)
 				fm[category].WriteString(str)
 			}
 		}
