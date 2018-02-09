@@ -165,9 +165,9 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 					when t1.score < 100 and t1.score >= 40 then 2
 					else 3
 				end file_judge,
-				concat(inet_ntoa(src_ip), '/', inet_ntoa(dst_ip)) src_ip_to_dst_ip_mesh,
-				concat(INET_NTOA(INET_ATON( inet_ntoa(src_ip) ) & 4294967040), '/', domain) src_ip_to_domain_mesh,
-				concat(INET_NTOA(INET_ATON( inet_ntoa(src_ip) ) & 4294967040), '/', inet_ntoa(dst_ip)) src_ip_class_to_dst_ip_mesh,
+				concat(inet_ntoa(src_ip), ',', inet_ntoa(dst_ip)) src_ip_to_dst_ip_mesh,
+				concat(inet_ntoa(src_ip), ',', domain) src_ip_to_domain_mesh,
+				concat(INET_NTOA(INET_ATON( inet_ntoa(src_ip) ) & 4294967040), ',', inet_ntoa(dst_ip)) src_ip_class_to_dst_ip_mesh,
 				from_unixtime(unix_timestamp(t.rdate) - (unix_timestamp(t.rdate) % 600)) every10min
 		from log_filetrans t left outer join pol_file_md5 t1 on t1.md5 = t.md5
 		where t.rdate >= ? and t.rdate <= ?
