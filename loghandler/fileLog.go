@@ -19,10 +19,14 @@ import (
 
 const (
 	RootId = -1
-	POP3 = 1
-	SMTP = 2
-	HTTP = 3
-	FTP = 4
+	POP3   = 1
+	SMTP   = 2
+	HTTP   = 3
+	FTP    = 4
+)
+const (
+	StatsNormal = 1 << iota
+	StatsMalware
 )
 
 type FileLog struct {
@@ -48,13 +52,15 @@ type FileLog struct {
 	FileJudge      int
 	Score          int
 	LogId          string
+	IpMesh         string
+	IpClassMesh    string
 }
 
 type FileLogHandler EventLogHandler
 type NetworkLogHandler EventLogHandler
 type AgentLogHandler EventLogHandler
 
-var tables string = "srcip,dstip,md5,dstcountry,dstdomain,dsturi,transtype,filetype,malcategory,filejudge"
+var tables string = "srcip,dstip,md5,dstcountry,dstdomain,dsturi,transtype,filetype,malcategory,filejudge,ipmesh,ipclassmesh"
 
 func NewFileLogHandler(engine *mserver.Engine, router *mux.Router, top int) *FileLogHandler {
 	return &FileLogHandler{
@@ -133,13 +139,11 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 	query := `
 		select 	t.rdate,
 				(sensor_id + 100000) sensor_id,
-				from_unixtime(unix_timestamp(t.rdate) - (unix_timestamp(t.rdate) % 600)) every10min,
 				trans_type,
 				ippool_src_gcode,
 				ippool_src_ocode,
 				ifnull(t.trans_type, 0) trans_type,
 				t.md5,
-				log_id,
 				src_ip,
 				src_port,
 				src_country,
@@ -159,7 +163,10 @@ func (f *FileLogHandler) fetchLogs() (int, error) {
 					when t1.score = 100 then 1
 					when t1.score < 100 and t1.score >= 40 then 2
 					else 3
-				end file_judge
+				end file_judge,
+				concat(INET_NTOA(INET_ATON( inet_ntoa(src_ip) ) & 4294967040), '/', domain) ip_class_mesh, 
+				concat(inet_ntoa(src_ip), '/', inet_ntoa(dst_ip)) ip_mesh,
+				from_unixtime(unix_timestamp(t.rdate) - (unix_timestamp(t.rdate) % 600)) every10min
 		from log_filetrans t left outer join pol_file_md5 t1 on t1.md5 = t.md5
 		where t.rdate >= ? and t.rdate <= ?
 	`
@@ -187,17 +194,19 @@ func (f *FileLogHandler) produceStats() error {
 
 	// Count
 	for _, r := range f.rows.([]FileLog) {
-		f.addToStats(&r, "srcip", r.SrcIp, false)
-		f.addToStats(&r, "dstip", r.DstIp, false)
-		f.addToStats(&r, "md5", r.Md5, false)
-		f.addToStats(&r, "transtype", r.TransType, false)
-		f.addToStats(&r, "filetype", r.FileType, false)
-		f.addToStats(&r, "malcategory", r.MalCategory, false)
-		f.addToStats(&r, "filejudge", r.FileJudge, false)
-		f.addToStats(&r, "dstcountry", r.DstCountry, false)
+		f.calStats(&r, "srcip", r.SrcIp, StatsNormal|StatsMalware)
+		f.calStats(&r, "dstip", r.DstIp, StatsNormal|StatsMalware)
+		f.calStats(&r, "md5", r.Md5, StatsNormal|StatsMalware)
+		f.calStats(&r, "transtype", r.TransType, StatsNormal|StatsMalware)
+		f.calStats(&r, "filetype", r.FileType, StatsNormal|StatsMalware)
+		f.calStats(&r, "malcategory", r.MalCategory, StatsNormal|StatsMalware)
+		f.calStats(&r, "filejudge", r.FileJudge, StatsNormal|StatsMalware)
+		f.calStats(&r, "dstcountry", r.DstCountry, StatsNormal|StatsMalware)
 		if r.TransType == HTTP || r.TransType == FTP {
-			f.addToStats(&r, "dstdomain", r.Domain, false)
-			f.addToStats(&r, "dsturi", r.Url, false)
+			f.calStats(&r, "dstdomain", r.Domain, StatsNormal|StatsMalware)
+			f.calStats(&r, "dsturi", r.Url, StatsNormal|StatsMalware)
+			f.calStats(&r, "ipmesh", r.IpMesh, StatsMalware)
+			f.calStats(&r, "ipclassmesh", r.IpClassMesh, StatsNormal)
 		}
 	}
 
@@ -219,7 +228,18 @@ func (f *FileLogHandler) produceStats() error {
 	return nil
 }
 
-func (f *FileLogHandler) addToStats(r *FileLog, category string, val interface{}, isMalicious bool) error {
+func (f *FileLogHandler) calStats(r *FileLog, category string, val interface{}, flags int) error {
+	if flags&StatsNormal > 0 {
+		f.addToStats(r, category, val)
+	}
+
+	if flags&StatsMalware > 0 && r.Score == 100 {
+		f.addToStats(r, category+"_mal", val)
+	}
+	return nil
+}
+
+func (f *FileLogHandler) addToStats(r *FileLog, category string, val interface{}) error {
 
 	// By sensor
 	if r.SensorId > 0 {
@@ -271,10 +291,6 @@ func (f *FileLogHandler) addToStats(r *FileLog, category string, val interface{}
 		}
 	}
 
-	// Malicious file
-	if r.Score == 100 && !isMalicious {
-		f.addToStats(r, category+"_mal", val, true)
-	}
 	return nil
 }
 
