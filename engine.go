@@ -172,7 +172,7 @@ func (e *Engine) SetConfig(extra string) error {
 	e.readInput("db.database", e.Config)
 
 	if len(extra) > 0 {
-		arr := strings.Split(extra, ",")
+		arr := strings.Fields(extra)
 		for _, k := range arr {
 			e.readInput(k, e.Config)
 		}

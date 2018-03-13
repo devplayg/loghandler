@@ -2,21 +2,23 @@ package main
 
 import (
 	"github.com/devplayg/mserver"
-	"github.com/devplayg/mserver/inputor"
 	log "github.com/sirupsen/logrus"
 	"os"
+	"github.com/devplayg/mserver/inputor"
+	"github.com/oschwald/geoip2-golang"
+	"path/filepath"
 )
 
 const (
-	AppName    = "M-Server data inputor"
-	AppVersion = "1.0.1802.10401"
+	AppName    = "M-Server Log Inputor"
+	AppVersion = "1.0.1803.10801"
 )
 
 func main() {
 	var (
 		version   = mserver.CmdFlags.Bool("version", false, "Version")
 		debug     = mserver.CmdFlags.Bool("debug", false, "Debug")
-		cpu       = mserver.CmdFlags.Int("cpu", 2, "CPU Count")
+		cpu       = mserver.CmdFlags.Int("cpu", 3, "CPU Count")
 		verbose   = mserver.CmdFlags.Bool("v", false, "Verbose")
 		setConfig = mserver.CmdFlags.Bool("config", false, "Edit configurations")
 		interval  = mserver.CmdFlags.Int64("i", 5000, "Interval(ms)")
@@ -33,7 +35,7 @@ func main() {
 	// Set configurations
 	engine := mserver.NewEngine(AppName, *debug, *cpu, *interval, *verbose)
 	if *setConfig {
-		engine.SetConfig("storage.watchDir")
+		engine.SetConfig("dir.filetrans ext.filetrans dir.detection ext.detection dir.traffic ext.traffic")
 		return
 	}
 	// Start engine
@@ -43,10 +45,39 @@ func main() {
 	}
 	log.Debug(engine.Config)
 
+	// Load "GeoIP2 Lite"
+
+	geoIpPath, _ := filepath.Abs(os.Args[0])
+	geoIpPath = filepath.Join(filepath.Dir(geoIpPath), "GeoLite2-Country.mmdb")
+	log.Debug(geoIpPath)
+	ipDB, err := geoip2.Open(geoIpPath)
+	if err != nil  {
+		log.Error(err)
+		return
+	}
+	defer func() {
+		if ipDB != nil {
+			ipDB.Close()
+		}
+	}()
+
 	// Start application
-	app := inputor.NewInputor(engine)
-	app.Start()
+	app := inputor.NewInputor(engine, ipDB)
+	errChan := make(chan error)
+	app.StartFiletransInputor(errChan)
+	go logDrain(errChan)
 
 	// Wait for signal
 	mserver.WaitForSignals()
+}
+
+func logDrain(errChan <-chan error) {
+	for {
+		select {
+		case err := <-errChan:
+			if err != nil {
+				log.Error(err)
+			}
+		}
+	}
 }

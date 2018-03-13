@@ -2,11 +2,6 @@ package stats
 
 import "sort"
 
-//const (
-//	RootId = -1
-	//DateDefault = "2006-01-02 15:04:05"
-//)
-
 //
 type Item struct {
 	Key   interface{}
@@ -15,7 +10,7 @@ type Item struct {
 type ItemList []Item
 
 type DataMap map[int]map[string]map[interface{}]int64 // Code / Category / Key / Count
-type DataRank map[int]map[string]ItemList        // Code / Category / Key / Ranking
+type DataRank map[int]map[string]ItemList             // Code / Category / Key / Ranking
 
 func (p ItemList) Len() int           { return len(p) }
 func (p ItemList) Less(i, j int) bool { return p[i].Count < p[j].Count }
@@ -35,6 +30,3 @@ func DetermineRankings(m map[interface{}]int64, top int) ItemList {
 		return list
 	}
 }
-
-
-

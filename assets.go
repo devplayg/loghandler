@@ -4,7 +4,6 @@ import (
 	"github.com/astaxie/beego/orm"
 )
 
-
 type DbInfo struct {
 	DriverName string
 	Host       string
@@ -48,4 +47,3 @@ func GetMemberAssets() (map[int][]int, error) {
 	}
 	return assets, nil
 }
-
