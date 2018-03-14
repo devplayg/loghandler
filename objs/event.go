@@ -45,10 +45,12 @@ type feFile struct {
 	Name     string `json:"name"`
 	TypeDesc string `json:"extern"`
 	Type     int    `json:"extern_code"`
+	Category int    `json:"category"`
 	Content  string `json:"content"`
 	Size     int64  `json:"size"`
 	Score    int    `json:"score"`
 	Date     string `json:"rdate"`
+	Flags    int    `json:"flags"`
 }
 type LogFile struct {
 	Path  string

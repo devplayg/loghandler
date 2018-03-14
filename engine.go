@@ -89,7 +89,7 @@ func (e *Engine) initLogger(verbose bool) error {
 	// Set log level
 	if e.debug {
 		log.SetLevel(log.DebugLevel)
-		orm.Debug = true
+		orm.Debug = false
 	}
 
 	if verbose {
@@ -198,8 +198,15 @@ func (e *Engine) readInput(key string, config map[string]string) {
 	newVal, _ := reader.ReadString('\n')
 	newVal = strings.TrimSpace(newVal)
 	if len(newVal) > 0 {
-		config[key] = newVal
+		r := strings.NewReplacer(`""`, ``, `'`, ``)
+		v := r.Replace(newVal)
+		if len(v) > 0 {
+			config[key] = newVal
+		} else {
+			config[key] = ``
+		}
 	}
+
 }
 
 func PrintHelp() {

@@ -32,13 +32,14 @@ func main() {
 		return
 	}
 
-	// Set configurations
+	// 엔진 설정
 	engine := mserver.NewEngine(AppName, *debug, *cpu, *interval, *verbose)
 	if *setConfig {
 		engine.SetConfig("dir.filetrans ext.filetrans dir.detection ext.detection dir.traffic ext.traffic")
 		return
 	}
-	// Start engine
+
+	// 엔진 시작
 	if err := engine.Start(); err != nil {
 		log.Error(err)
 		return
@@ -46,7 +47,6 @@ func main() {
 	log.Debug(engine.Config)
 
 	// Load "GeoIP2 Lite"
-
 	geoIpPath, _ := filepath.Abs(os.Args[0])
 	geoIpPath = filepath.Join(filepath.Dir(geoIpPath), "GeoLite2-Country.mmdb")
 	log.Debug(geoIpPath)
@@ -61,23 +61,21 @@ func main() {
 		}
 	}()
 
-	// Start application
-	app := inputor.NewInputor(engine, ipDB)
-	errChan := make(chan error)
-	app.StartFiletransInputor(errChan)
-	go logDrain(errChan)
+	// Inputer 시작
+	appInputor := inputor.NewInputor(engine, ipDB)
+	appInputor.StartFiletransInputor()
 
 	// Wait for signal
 	mserver.WaitForSignals()
 }
-
-func logDrain(errChan <-chan error) {
-	for {
-		select {
-		case err := <-errChan:
-			if err != nil {
-				log.Error(err)
-			}
-		}
-	}
-}
+//
+//func logDrain(errChan <-chan error) {
+//	for {
+//		select {
+//		case err := <-errChan:
+//			if err != nil {
+//				log.Error(err)
+//			}
+//		}
+//	}
+//}
