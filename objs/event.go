@@ -27,8 +27,8 @@ type feNetwork struct {
 	DstIpStr  string `json:"dst_ip"`
 	DstPort   int    `json:"dst_port"`
 	Protocol  int    `json:"protocol"`
-	Domain    string `json:"domain"`
-	Url       string `json:"url"`
+	Domain    string `json:"d_site"`
+	Url       string `json:"d_path"`
 }
 type feMail struct {
 	MailId        string `json:"mail_id"`
@@ -41,7 +41,7 @@ type feMail struct {
 type feFile struct {
 	FileId   string `json:"f_id"`
 	Md5      string `json:"md5"`
-	Sha256   string `json:"sha_256"`
+	Sha256   string `json:"sha256"`
 	Name     string `json:"name"`
 	TypeDesc string `json:"extern"`
 	Type     int    `json:"extern_code"`
@@ -50,7 +50,7 @@ type feFile struct {
 	Size     int64  `json:"size"`
 	Score    int    `json:"score"`
 	Date     string `json:"rdate"`
-	Flags    int    `json:"flags"`
+	Flags    int    `json:"rule_flag"`
 }
 type LogFile struct {
 	Path  string

@@ -5,17 +5,21 @@ import (
 	"crypto/sha256"
 	"errors"
 	"flag"
-	"github.com/devplayg/golibs/crypto"
+	"fmt"
 	"github.com/astaxie/beego/orm"
+	"github.com/devplayg/golibs/crypto"
+	"github.com/devplayg/mserver/objs"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/oschwald/geoip2-golang"
 	log "github.com/sirupsen/logrus"
+	"github.com/yl2chen/cidranger"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
-	"fmt"
+	"github.com/davecgh/go-spew/spew"
 )
 
 const (
@@ -42,6 +46,8 @@ type Engine struct {
 	cpuCount    int
 	processName string
 	logOutput   int // 0: STDOUT, 1: File
+	GeoIP2      *geoip2.Reader
+	IpPoolMap   map[int]cidranger.Ranger
 }
 
 func NewEngine(appName string, debug bool, cpuCount int, interval int64, verbose bool) *Engine {
@@ -73,9 +79,93 @@ func (e *Engine) Start() error {
 		return err
 	}
 
+	err = e.loadGeoIP()
+	if err != nil {
+		return err
+	}
+
+	err = e.loadIpPool()
+	if err != nil {
+		return err
+	}
+
 	log.Debug("Engine started")
 	runtime.GOMAXPROCS(e.cpuCount)
 	log.Debugf("GOMAXPROCS set to %d", runtime.GOMAXPROCS(0))
+	return nil
+}
+
+func (e *Engine) loadIpPool() error {
+	// IPPool 조회
+	query := "select sensor_id, folder_id, ippool_id, name, concat(ip, '/', cidr) ip_cidr from ast_ippool"
+	var ippools []objs.IpPool
+	o := orm.NewOrm()
+	_, err := o.Raw(query).QueryRows(&ippools)
+	if err != nil {
+		return err
+	}
+
+	// 센서별 IP Pool 분류
+	e.IpPoolMap = make(map[int]cidranger.Ranger)
+	for _, a := range ippools {
+		a.UpdateIpNet()
+		if _, ok := e.IpPoolMap[a.SensorId]; !ok {
+			ranger := cidranger.NewPCTrieRanger()
+			e.IpPoolMap[a.SensorId] = ranger
+		}
+
+		r := e.IpPoolMap[a.SensorId]
+		err := r.Insert(a)
+		if err != nil {
+			log.Debug(err)
+		}
+	}
+
+	//list, err := e.IpPoolMap[1].ContainingNetworks(net.ParseIP("11.0.11.1"))
+	//if err != nil {
+	//	log.Error(err)
+	//}
+	spew.Dump(e.IpPoolMap[1])
+	//spew.Dump(e.IpPoolMap[2])
+	//ip := net.ParseIP("11.0.11.1")
+	//spew.Dump(ip)
+	//list, err := e.IpPoolMap[1].ContainingNetworks(ip)
+	//small := list[0]
+	//for i:=1; i<len(list); i++ {
+	//	if list[i].(objs.IpPool).HostCount < small.(objs.IpPool).HostCount {
+	//		small = list[i]
+	//	}
+	//}
+
+	//sort.Sort(list.(objs.IpPoolList))
+	//
+	//spew.Dump(small)
+	//smallest := nil
+	//for _, a := range list {
+	//b := a.(objs.IpPool)
+	//log.Debugf("### %s / %d", b.Name, b.HostCount)
+	//}
+	//
+	//ranger := cidranger.NewPCTrieRanger()
+	//_, network5, _ := net.ParseCIDR("128.168.1.0/24")
+	//ranger.Insert(NewIpPool(*network1, "Network #1"))
+	//
+	//list, _ := ranger.ContainingNetworks(net.ParseIP("192.168.0.144"))
+
+	//spew.Dump(ippools)
+
+	return nil
+}
+
+func (e *Engine) loadGeoIP() error {
+	geoIpPath, _ := filepath.Abs(os.Args[0])
+	geoIpPath = filepath.Join(filepath.Dir(geoIpPath), "libs", "GeoLite2-Country.mmdb")
+	ipDB, err := geoip2.Open(geoIpPath)
+	if err != nil {
+		return err
+	}
+	e.GeoIP2 = ipDB
+
 	return nil
 }
 

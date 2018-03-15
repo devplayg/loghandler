@@ -7,7 +7,6 @@ import (
 	"github.com/devplayg/golibs/network"
 	"github.com/devplayg/mserver"
 	"github.com/devplayg/mserver/objs"
-	"github.com/oschwald/geoip2-golang"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net"
@@ -21,13 +20,12 @@ import (
 )
 
 const (
-	DefaultInputDateFormat  = "2006-01-02 15:04:05.000"
-	DefaultOutputDateFormat = "2006-01-02 15:04:05"
+	InputJsonDateFormat = "2006-01-02 15:04:05.000"
+	DefaultDateFormat   = "2006-01-02 15:04:05"
 )
 
 type Inputor struct {
 	engine       *mserver.Engine
-	ipDB         *geoip2.Reader
 	detectionDir string
 	detectionExt string
 	filetransDir string
@@ -36,15 +34,16 @@ type Inputor struct {
 	trafficExt   string
 }
 
-func NewInputor(e *mserver.Engine, ipDB *geoip2.Reader) *Inputor {
+func NewInputor(e *mserver.Engine) *Inputor {
 
-	inputor := Inputor{engine: e, ipDB: ipDB}
-	homeDir := "c:/temp/json"
+	inputor := Inputor{engine: e}
+	absPath, _ := filepath.Abs(os.Args[0])
+	targetDir := filepath.Dir(absPath)
 
 	// 파일 다운로드 이벤트
 	inputor.filetransDir = e.Config["dir.filetrans"]
 	if len(inputor.filetransDir) < 1 {
-		inputor.filetransDir = homeDir
+		inputor.filetransDir = targetDir
 	}
 	inputor.filetransExt = e.Config["ext.filetrans"]
 	//log.Debugf("### %s", inputor.filetransExt)
@@ -56,7 +55,7 @@ func NewInputor(e *mserver.Engine, ipDB *geoip2.Reader) *Inputor {
 	// 파일 탐지 이벤트
 	inputor.detectionDir = e.Config["dir.detection"]
 	if len(inputor.detectionDir) < 1 {
-		inputor.detectionDir = homeDir
+		inputor.detectionDir = targetDir
 	}
 	inputor.detectionExt = e.Config["ext.detection"]
 	if len(inputor.detectionExt) < 1 {
@@ -66,7 +65,7 @@ func NewInputor(e *mserver.Engine, ipDB *geoip2.Reader) *Inputor {
 	// 트래픽
 	inputor.trafficDir = e.Config["dir.traffic"]
 	if len(inputor.trafficDir) < 1 {
-		inputor.trafficDir = homeDir
+		inputor.trafficDir = targetDir
 	}
 	inputor.trafficExt = e.Config["ext.traffic"]
 	if len(inputor.trafficExt) < 1 {
@@ -163,6 +162,7 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 	//defer os.Remove(tmpFileName.Name())
 
 	for _, fi := range logFileList {
+
 		// 파일 읽기
 		b, err := ioutil.ReadFile(fi.Path)
 		if err != nil {
@@ -189,9 +189,15 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 		// 파싱
 		parsedId := strings.Split(e.Info.AnalysisId, "_")
 		gid := strings.Join(parsedId[0:4], "_")
-		sensorId, _ := strconv.Atoi(parsedId[0])
+		sensorId, err := strconv.Atoi(parsedId[0])
+		if err != nil {
+			log.Errorf("Invalid sensor id: %s", fi.Path)
+			os.Rename(fi.Path, fi.Path+".invalid")
+			continue
+		}
+
 		for _, f := range e.Files {
-			t, _ := time.Parse(DefaultInputDateFormat, f.Date)
+			t, _ := time.Parse(InputJsonDateFormat, f.Date)
 			r := objs.LogFileTrans{
 				Id:        f.FileId,
 				Gid:       gid,
@@ -213,21 +219,23 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 				r.FileType = f.Type
 				r.Filename = f.Name
 
-				// Source information
+				// 출발지 정보 설정
 				r.SrcIp = e.Network.SrcIpStr
 				e.Network.SrcIp = net.ParseIP(e.Network.SrcIpStr)
 				r.SrcIpInt = network.IpToInt32(e.Network.SrcIp)
 				r.SrcPort = e.Network.SrcPort
-				srcCountry, _ := c.ipDB.Country(e.Network.SrcIp)
+				srcCountry, _ := c.engine.GeoIP2.Country(e.Network.SrcIp)
 				r.SrcCountry = srcCountry.Country.IsoCode
+				r.IppoolSrcGcode, r.IppoolSrcOcode = c.getIppoolCodes(sensorId, e.Network.SrcIp)
 
-				// Destination
+				// 목적지 정보 설정
 				r.DstIp = e.Network.DstIpStr
 				e.Network.DstIp = net.ParseIP(e.Network.DstIpStr)
 				r.DstIpInt = network.IpToInt32(e.Network.DstIp)
 				r.DstPort = e.Network.DstPort
-				dstCountry, _ := c.ipDB.Country(e.Network.DstIp)
+				dstCountry, _ := c.engine.GeoIP2.Country(e.Network.DstIp)
 				r.DstCountry = dstCountry.Country.IsoCode
+				r.IppoolDstGcode, r.IppoolDstOcode = c.getIppoolCodes(sensorId, e.Network.DstIp)
 
 			} else if e.Info.Type >= 3 && e.Info.Type <= 5 { // POP3, SMTP, MAIL
 				r.SessionId = e.Mail.MailId
@@ -274,11 +282,39 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 	return nil
 }
 
+func (c *Inputor) getIppoolCodes(sensorId int, ip net.IP) (int, int) {
+
+	log.Debugf("### IP=%s, sensor_id=%d ",ip.String(), sensorId)
+	if _, ok := c.engine.IpPoolMap[sensorId]; !ok {
+		return 0, 0
+	}
+	list, _ := c.engine.IpPoolMap[sensorId].ContainingNetworks(ip)
+	log.Debugf("### 1, length=%d", len(list))
+	if len(list) < 1 {
+		return 0, 0
+	}
+	log.Debug("### 2")
+	if len(list) == 1 {
+		return list[0].(objs.IpPool).FolderId, list[0].(objs.IpPool).IppoolId
+	}
+
+	log.Debug("### 3")
+	log.Debugf("### Len: %d", len(list))
+	smallest := list[0]
+	for i := 1; i < len(list); i++ {
+		if list[i].(objs.IpPool).HostCount < smallest.(objs.IpPool).HostCount {
+			smallest = list[i]
+		}
+	}
+	log.Debug("### " + smallest.(objs.IpPool).Name)
+	return smallest.(objs.IpPool).FolderId, smallest.(objs.IpPool).IppoolId
+}
+
 func (i *Inputor) getLines(r *objs.LogFileTrans) (string, string, string) {
 	lineFileTrans := fmt.Sprintf("%s\t%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\t%d\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\t%d\t%d\t%d\t%s\t%d\r\n",
 		r.Id,
 		r.Gid,
-		r.Rdate.Format(DefaultOutputDateFormat),
+		r.Rdate.Format(DefaultDateFormat),
 		r.TransType,
 		r.SensorId,
 		r.IppoolSrcGcode,
@@ -319,8 +355,8 @@ func (i *Inputor) getLines(r *objs.LogFileTrans) (string, string, string) {
 		r.Content,
 		r.Size,
 		r.Flags,
-		r.Rdate.Format(DefaultOutputDateFormat),
-		r.Rdate.Format(DefaultOutputDateFormat),
+		r.Rdate.Format(DefaultDateFormat),
+		r.Rdate.Format(DefaultDateFormat),
 	)
 
 	lineFileName := fmt.Sprintf("%s\t%s\n",
@@ -332,7 +368,6 @@ func (i *Inputor) getLines(r *objs.LogFileTrans) (string, string, string) {
 }
 
 func (i *Inputor) insertFileTrans(path string) error {
-	log.Debug(path)
 	query := `
 		LOAD DATA LOCAL INFILE '%s' REPLACE INTO TABLE log_filetrans 
 		FIELDS TERMINATED BY '\t' 
@@ -399,7 +434,6 @@ func (i *Inputor) insertFileHash(path string) error {
 }
 
 func (i *Inputor) insertFileName(path string) error {
-	log.Debug(path)
 	query := `
 		LOAD DATA LOCAL INFILE '%s' REPLACE INTO TABLE pol_filename
 		FIELDS TERMINATED BY '\t' 

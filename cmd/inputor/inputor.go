@@ -5,8 +5,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"github.com/devplayg/mserver/inputor"
-	"github.com/oschwald/geoip2-golang"
-	"path/filepath"
 )
 
 const (
@@ -46,23 +44,23 @@ func main() {
 	}
 	log.Debug(engine.Config)
 
-	// Load "GeoIP2 Lite"
-	geoIpPath, _ := filepath.Abs(os.Args[0])
-	geoIpPath = filepath.Join(filepath.Dir(geoIpPath), "GeoLite2-Country.mmdb")
-	log.Debug(geoIpPath)
-	ipDB, err := geoip2.Open(geoIpPath)
-	if err != nil  {
-		log.Error(err)
-		return
-	}
-	defer func() {
-		if ipDB != nil {
-			ipDB.Close()
-		}
-	}()
+	//// Load "GeoIP2 Lite"
+	//geoIpPath, _ := filepath.Abs(os.Args[0])
+	//geoIpPath = filepath.Join(filepath.Dir(geoIpPath), "GeoLite2-Country.mmdb")
+	//log.Debug(geoIpPath)
+	//ipDB, err := geoip2.Open(geoIpPath)
+	//if err != nil  {
+	//	log.Error(err)
+	//	return
+	//}
+	//defer func() {
+	//	if ipDB != nil {
+	//		ipDB.Close()
+	//	}
+	//}()
 
 	// Inputer 시작
-	appInputor := inputor.NewInputor(engine, ipDB)
+	appInputor := inputor.NewInputor(engine)
 	appInputor.StartFiletransInputor()
 
 	// Wait for signal
