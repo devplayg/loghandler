@@ -98,8 +98,8 @@ func (c *Inputor) StartFiletransInputor() error {
 	// 검색할 디렉토리 설정
 	dirs := c.getTargetDirs(c.filetransDir)
 
-	log.Debugf("Extensions: %v", extTable)
-	log.Debugf("Directories: %v", dirs)
+	log.Debugf("Directories for Filetrans: %v", dirs)
+	log.Debugf("Extensions for Filetrans: %v", extTable)
 
 	go func() {
 		for {
@@ -152,14 +152,14 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 	if err != nil {
 		return err
 	}
-	//defer os.Remove(tmpFileHash.Name())
+	defer os.Remove(tmpFileHash.Name())
 
 	// 임시파일 생성 - 파일 정보
 	tmpFileName, err := ioutil.TempFile(os.TempDir(), "pol_filename_")
 	if err != nil {
 		return err
 	}
-	//defer os.Remove(tmpFileName.Name())
+	defer os.Remove(tmpFileName.Name())
 
 	for _, fi := range logFileList {
 
@@ -195,57 +195,72 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 			os.Rename(fi.Path, fi.Path+".invalid")
 			continue
 		}
+		
+		// 공통정보 분리
+		r := objs.LogFileTrans{
+			Gid:       gid,
+			TransType: e.Info.Type, // (1:HTTP, 2:FTP, 3:POP3, 4:SMTP, 5: MAIL(?))
+			SensorId:  sensorId,
+		}
+
+		// 출발지 정보 설정
+		if e.Info.Type == objs.HTTP && e.Info.Type == objs.FTP {
+			r.SessionId = e.Network.SessionId
+			r.SrcIp = e.Network.SrcIpStr
+			e.Network.SrcIp = net.ParseIP(e.Network.SrcIpStr)
+			r.SrcIpInt = network.IpToInt32(e.Network.SrcIp)
+			r.SrcPort = e.Network.SrcPort
+			srcCountry, _ := c.engine.GeoIP2.Country(e.Network.SrcIp)
+			r.SrcCountry = srcCountry.Country.IsoCode
+			r.IppoolSrcGcode, r.IppoolSrcOcode = c.getIppoolCodes(sensorId, e.Network.SrcIp)
+
+			// 목적지 정보 설정
+			r.DstIp = e.Network.DstIpStr
+			e.Network.DstIp = net.ParseIP(e.Network.DstIpStr)
+			r.DstIpInt = network.IpToInt32(e.Network.DstIp)
+			r.DstPort = e.Network.DstPort
+			dstCountry, _ := c.engine.GeoIP2.Country(e.Network.DstIp)
+			r.DstCountry = dstCountry.Country.IsoCode
+			r.IppoolDstGcode, r.IppoolDstOcode = c.getIppoolCodes(sensorId, e.Network.DstIp)
+
+			r.Domain = e.Network.Domain
+			r.Url = e.Network.Url
+			r.GroupCount = e.Info.FileCount
+		} else if e.Info.Type == objs.POP3 && e.Info.Type == objs.SMTP {
+			r.SessionId = e.Mail.MailId
+			r.MailSender = e.Mail.SenderAddr
+			r.MailSenderName = e.Mail.SenderName
+			r.MailRcpt = e.Mail.RecipientAddr
+			r.MailRcptName = e.Mail.RecipientName
+			r.GroupCount = e.Info.UrlCount
+
+		} else if e.Info.Type == objs.MTA  {
+			r.SessionId = e.Mail.MailId
+			r.MailSender = e.Mail.SenderAddr
+			r.MailSenderName = e.Mail.SenderName
+			r.MailRcpt = e.Mail.RecipientAddr
+			r.MailRcptName = e.Mail.RecipientName
+			r.GroupCount = e.Info.UrlCount
+		} else {
+			continue
+		}
 
 		for _, f := range e.Files {
-			t, _ := time.Parse(InputJsonDateFormat, f.Date)
-			r := objs.LogFileTrans{
-				Id:        f.FileId,
-				Gid:       gid,
-				Rdate:     t,
-				TransType: e.Info.Type, // (1:HTTP, 2:FTP, 3:POP3, 4:SMTP, 5: MAIL(?))
-				SensorId:  sensorId,
-				Md5:       f.Md5,
-				Sha256:    f.Sha256,
-				Size:      f.Size,
-				Content:   f.Content,
-				Score:     f.Score,
-				MalType:   f.Category,
-				FileType:  f.Type,
-				Flags:     f.Flags,
-			}
+			r.Id = f.FileId
+			r.Rdate, _ = time.Parse(InputJsonDateFormat, f.Date)
+			r.Md5 = f.Md5
+			r.Sha256 = f.Sha256
+			r.Size = f.Size
+			r.Content = f.Content
+			r.Score = f.Score
+			r.MalType = f.Category
+			r.FileType = f.Type
+			r.Flags = f.Flags
+			r.Filename = f.Name
 
-			if e.Info.Type >= 1 && e.Info.Type <= 2 { // HTTP, FTP
-				r.SessionId = e.Network.SessionId
-				r.FileType = f.Type
-				r.Filename = f.Name
-
-				// 출발지 정보 설정
-				r.SrcIp = e.Network.SrcIpStr
-				e.Network.SrcIp = net.ParseIP(e.Network.SrcIpStr)
-				r.SrcIpInt = network.IpToInt32(e.Network.SrcIp)
-				r.SrcPort = e.Network.SrcPort
-				srcCountry, _ := c.engine.GeoIP2.Country(e.Network.SrcIp)
-				r.SrcCountry = srcCountry.Country.IsoCode
-				r.IppoolSrcGcode, r.IppoolSrcOcode = c.getIppoolCodes(sensorId, e.Network.SrcIp)
-
-				// 목적지 정보 설정
-				r.DstIp = e.Network.DstIpStr
-				e.Network.DstIp = net.ParseIP(e.Network.DstIpStr)
-				r.DstIpInt = network.IpToInt32(e.Network.DstIp)
-				r.DstPort = e.Network.DstPort
-				dstCountry, _ := c.engine.GeoIP2.Country(e.Network.DstIp)
-				r.DstCountry = dstCountry.Country.IsoCode
-				r.IppoolDstGcode, r.IppoolDstOcode = c.getIppoolCodes(sensorId, e.Network.DstIp)
-
-			} else if e.Info.Type >= 3 && e.Info.Type <= 5 { // POP3, SMTP, MAIL
-				r.SessionId = e.Mail.MailId
-				r.Size = f.Size
-				r.MailSender = e.Mail.SenderAddr
-				r.MailSenderName = e.Mail.SenderName
-				r.MailRcpt = e.Mail.RecipientAddr
-				r.MailRcptName = e.Mail.RecipientName
-				r.Filename = e.Mail.Subject
-
+			if e.Info.Type == objs.HTTP && e.Info.Type == objs.FTP {
+			} else if e.Info.Type == objs.POP3 && e.Info.Type == objs.SMTP {
+			} else if e.Info.Type == objs.MTA  {
 			} else {
 				continue
 			}

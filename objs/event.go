@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+const (
+	HTTP = 1
+	FTP = 2
+	POP3 = 3
+	SMTP = 4
+	MTA = 5
+)
+
 // Log file
 type FileEvent struct {
 	Info    feInfo    `json:"info"`

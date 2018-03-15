@@ -19,7 +19,6 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
-	"github.com/davecgh/go-spew/spew"
 )
 
 const (
@@ -120,39 +119,6 @@ func (e *Engine) loadIpPool() error {
 			log.Debug(err)
 		}
 	}
-
-	//list, err := e.IpPoolMap[1].ContainingNetworks(net.ParseIP("11.0.11.1"))
-	//if err != nil {
-	//	log.Error(err)
-	//}
-	spew.Dump(e.IpPoolMap[1])
-	//spew.Dump(e.IpPoolMap[2])
-	//ip := net.ParseIP("11.0.11.1")
-	//spew.Dump(ip)
-	//list, err := e.IpPoolMap[1].ContainingNetworks(ip)
-	//small := list[0]
-	//for i:=1; i<len(list); i++ {
-	//	if list[i].(objs.IpPool).HostCount < small.(objs.IpPool).HostCount {
-	//		small = list[i]
-	//	}
-	//}
-
-	//sort.Sort(list.(objs.IpPoolList))
-	//
-	//spew.Dump(small)
-	//smallest := nil
-	//for _, a := range list {
-	//b := a.(objs.IpPool)
-	//log.Debugf("### %s / %d", b.Name, b.HostCount)
-	//}
-	//
-	//ranger := cidranger.NewPCTrieRanger()
-	//_, network5, _ := net.ParseCIDR("128.168.1.0/24")
-	//ranger.Insert(NewIpPool(*network1, "Network #1"))
-	//
-	//list, _ := ranger.ContainingNetworks(net.ParseIP("192.168.0.144"))
-
-	//spew.Dump(ippools)
 
 	return nil
 }
