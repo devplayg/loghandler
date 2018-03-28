@@ -136,6 +136,7 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 	if len(logFileList) < 1 {
 		return nil
 	}
+	log.Debugf("Found files: %d", len(logFileList))
 
 	// 파일 수정시간을 기준으로 오름차순 정렬
 	sort.Sort(objs.LogFileList(logFileList))
@@ -145,21 +146,21 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFileTrans.Name())
+	//defer os.Remove(tmpFileTrans.Name())
 
 	// 임시파일 생성 - 파일 정보
 	tmpFileHash, err := ioutil.TempFile(os.TempDir(), "pol_filehash_")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFileHash.Name())
+	//defer os.Remove(tmpFileHash.Name())
 
 	// 임시파일 생성 - 파일 정보
 	tmpFileName, err := ioutil.TempFile(os.TempDir(), "pol_filename_")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFileName.Name())
+	//defer os.Remove(tmpFileName.Name())
 
 	for _, fi := range logFileList {
 
@@ -204,7 +205,7 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 		}
 
 		// 출발지 정보 설정
-		if e.Info.Type == objs.HTTP && e.Info.Type == objs.FTP {
+		if e.Info.Type == objs.HTTP || e.Info.Type == objs.FTP {
 			r.SessionId = e.Network.SessionId
 			r.SrcIp = e.Network.SrcIpStr
 			e.Network.SrcIp = net.ParseIP(e.Network.SrcIpStr)
@@ -226,13 +227,15 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 			r.Domain = e.Network.Domain
 			r.Url = e.Network.Url
 			r.GroupCount = e.Info.FileCount
-		} else if e.Info.Type == objs.POP3 && e.Info.Type == objs.SMTP {
+		} else if e.Info.Type == objs.POP3 || e.Info.Type == objs.SMTP {
 			r.SessionId = e.Mail.MailId
 			r.MailSender = e.Mail.SenderAddr
 			r.MailSenderName = e.Mail.SenderName
 			r.MailRcpt = e.Mail.RecipientAddr
 			r.MailRcptName = e.Mail.RecipientName
 			r.GroupCount = e.Info.UrlCount
+
+			r.Domain = e.Mail.Subject
 
 		} else if e.Info.Type == objs.MTA  {
 			r.SessionId = e.Mail.MailId
@@ -242,10 +245,13 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 			r.MailRcptName = e.Mail.RecipientName
 			r.GroupCount = e.Info.UrlCount
 		} else {
+			log.Debugf("Skipped: %s, TransType: %d", fi.Path, e.Info.Type)
 			continue
 		}
 
-		for _, f := range e.Files {
+
+		for idx, f := range e.Files {
+			log.Debugf("File[%d]: %s / %s", idx+1, f.Name, filepath.Base(fi.Path))
 			r.Id = f.FileId
 			r.Rdate, _ = time.Parse(InputJsonDateFormat, f.Date)
 			r.Md5 = f.Md5
@@ -255,13 +261,14 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 			r.Score = f.Score
 			r.MalType = f.Category
 			r.FileType = f.Type
-			r.Flags = f.Flags
+			r.SensorFlags = f.Flags
 			r.Filename = f.Name
 
-			if e.Info.Type == objs.HTTP && e.Info.Type == objs.FTP {
-			} else if e.Info.Type == objs.POP3 && e.Info.Type == objs.SMTP {
+			if e.Info.Type == objs.HTTP || e.Info.Type == objs.FTP {
+			} else if e.Info.Type == objs.POP3 || e.Info.Type == objs.SMTP {
 			} else if e.Info.Type == objs.MTA  {
 			} else {
+				log.Debug("### xxx out")
 				continue
 			}
 
@@ -356,7 +363,7 @@ func (i *Inputor) getLines(r *objs.LogFileTrans) (string, string, string) {
 		r.Content,
 		r.Size,
 		r.Score,
-		r.Flags,
+		r.SensorFlags,
 		r.SessionId,
 		r.GroupCount,
 	)
@@ -369,7 +376,7 @@ func (i *Inputor) getLines(r *objs.LogFileTrans) (string, string, string) {
 		r.FileType,
 		r.Content,
 		r.Size,
-		r.Flags,
+		r.SensorFlags,
 		r.Rdate.Format(DefaultDateFormat),
 		r.Rdate.Format(DefaultDateFormat),
 	)
@@ -387,7 +394,7 @@ func (i *Inputor) insertFileTrans(path string) error {
 		LOAD DATA LOCAL INFILE '%s' REPLACE INTO TABLE log_filetrans 
 		FIELDS TERMINATED BY '\t' 
 		LINES TERMINATED BY '\n' 
-		(id,gid,rdate,trans_type,sensor_id,ippool_src_gcode,ippool_src_ocode,ippool_dst_gcode,ippool_dst_ocode,md5,sha256,src_ip,src_port,src_country,dst_ip,dst_port,dst_country,domain,url,filename,mail_sender,mail_sender_name,mail_recipient,mail_recipient_name,maltype,filetype,content,size,score,flags,session_id,group_count);
+		(id,gid,rdate,trans_type,sensor_id,ippool_src_gcode,ippool_src_ocode,ippool_dst_gcode,ippool_dst_ocode,md5,sha256,src_ip,src_port,src_country,dst_ip,dst_port,dst_country,domain,url,file_name,mail_sender,mail_sender_name,mail_recipient,mail_recipient_name,mal_type,file_type,content,file_size,score,sensor_flags,session_id,group_count);
 	`
 	query = fmt.Sprintf(query, filepath.ToSlash(path))
 	o := orm.NewOrm()
@@ -416,7 +423,7 @@ func (i *Inputor) insertFileHash(path string) error {
 		LOAD DATA LOCAL INFILE '%s' REPLACE INTO TABLE pol_filehash_temp 
 		FIELDS TERMINATED BY '\t' 
 		LINES TERMINATED BY '\n' 
-		(md5, sha256, score, maltype, filetype, content, size, flags, rdate, udate)
+		(md5, sha256, score, mal_type, file_type, content, size, sensor_flags, rdate, udate)
 	`
 	query = fmt.Sprintf(query, filepath.ToSlash(path))
 	_, err = o.Raw(query).Exec()
@@ -426,17 +433,17 @@ func (i *Inputor) insertFileHash(path string) error {
 
 	// 중복 업데이트(필요한 필드만)
 	query = `
-		insert into pol_filehash(md5, sha256, score, maltype, filetype, content, size, flags, rdate, udate)
-		select md5, sha256, score, maltype, filetype, content, size, flags, rdate, udate
+		insert into pol_filehash(md5, sha256, score, mal_type, file_type, content, size, sensor_flags, rdate, udate)
+		select md5, sha256, score, mal_type, file_type, content, size, sensor_flags, rdate, udate
 		from pol_filehash_temp
 		on duplicate key update
 			sha256 = values(sha256),
 			score = values(score),
-			maltype = values(maltype),
-			filetype = values(filetype),
+			mal_type = values(mal_type),
+			file_type = values(file_type),
 			content = values(content),
 			size = values(size),
-			flags = values(flags),
+			sensor_flags = values(sensor_flags),
 			udate = values(udate);
 	`
 

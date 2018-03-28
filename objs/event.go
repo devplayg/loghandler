@@ -7,10 +7,10 @@ import (
 
 const (
 	HTTP = 1
-	FTP = 2
+	FTP  = 2
 	POP3 = 3
 	SMTP = 4
-	MTA = 5
+	MTA  = 5
 )
 
 // Log file
@@ -109,7 +109,8 @@ type LogFileTrans struct {
 	Score          int
 	Size           int64
 	Content        string
-	Flags          int
+	SensorFlags    int
+	ManagerFlags   int
 	GroupCount     int
 	Gdate          time.Time
 }
