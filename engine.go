@@ -262,7 +262,6 @@ func (e *Engine) readInput(key string, config map[string]string) {
 			config[key] = ``
 		}
 	}
-
 }
 
 func PrintHelp() {

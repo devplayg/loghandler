@@ -196,7 +196,7 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 			os.Rename(fi.Path, fi.Path+".invalid")
 			continue
 		}
-		
+
 		// 공통정보 분리
 		r := objs.LogFileTrans{
 			Gid:       gid,
@@ -237,7 +237,7 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 
 			r.Domain = e.Mail.Subject
 
-		} else if e.Info.Type == objs.MTA  {
+		} else if e.Info.Type == objs.MTA {
 			r.SessionId = e.Mail.MailId
 			r.MailSender = e.Mail.SenderAddr
 			r.MailSenderName = e.Mail.SenderName
@@ -248,7 +248,6 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 			log.Debugf("Skipped: %s, TransType: %d", fi.Path, e.Info.Type)
 			continue
 		}
-
 
 		for idx, f := range e.Files {
 			log.Debugf("File[%d]: %s / %s", idx+1, f.Name, filepath.Base(fi.Path))
@@ -266,7 +265,7 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 
 			if e.Info.Type == objs.HTTP || e.Info.Type == objs.FTP {
 			} else if e.Info.Type == objs.POP3 || e.Info.Type == objs.SMTP {
-			} else if e.Info.Type == objs.MTA  {
+			} else if e.Info.Type == objs.MTA {
 			} else {
 				log.Debug("### xxx out")
 				continue
@@ -306,7 +305,7 @@ func (c *Inputor) processFiletransLog(logFileList objs.LogFileList) error {
 
 func (c *Inputor) getIppoolCodes(sensorId int, ip net.IP) (int, int) {
 
-	log.Debugf("### IP=%s, sensor_id=%d ",ip.String(), sensorId)
+	log.Debugf("### IP=%s, sensor_id=%d ", ip.String(), sensorId)
 	if _, ok := c.engine.IpPoolMap[sensorId]; !ok {
 		return 0, 0
 	}
@@ -368,7 +367,7 @@ func (i *Inputor) getLines(r *objs.LogFileTrans) (string, string, string) {
 		r.GroupCount,
 	)
 
-	lineFileHash := fmt.Sprintf("%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n",
+	lineFileHash := fmt.Sprintf("%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\t%s\n",
 		r.Md5,
 		r.Sha256,
 		r.Score,
@@ -377,6 +376,7 @@ func (i *Inputor) getLines(r *objs.LogFileTrans) (string, string, string) {
 		r.Content,
 		r.Size,
 		r.SensorFlags,
+		r.Filename,
 		r.Rdate.Format(DefaultDateFormat),
 		r.Rdate.Format(DefaultDateFormat),
 	)
@@ -423,7 +423,7 @@ func (i *Inputor) insertFileHash(path string) error {
 		LOAD DATA LOCAL INFILE '%s' REPLACE INTO TABLE pol_filehash_temp 
 		FIELDS TERMINATED BY '\t' 
 		LINES TERMINATED BY '\n' 
-		(md5, sha256, score, mal_type, file_type, content, size, sensor_flags, rdate, udate)
+		(md5, sha256, score, mal_type, file_type, content, size, sensor_flags, file_name, rdate, udate)
 	`
 	query = fmt.Sprintf(query, filepath.ToSlash(path))
 	_, err = o.Raw(query).Exec()
@@ -433,8 +433,8 @@ func (i *Inputor) insertFileHash(path string) error {
 
 	// 중복 업데이트(필요한 필드만)
 	query = `
-		insert into pol_filehash(md5, sha256, score, mal_type, file_type, content, size, sensor_flags, rdate, udate)
-		select md5, sha256, score, mal_type, file_type, content, size, sensor_flags, rdate, udate
+		insert into pol_filehash(md5, sha256, score, mal_type, file_type, content, size, sensor_flags, file_name, rdate, udate)
+		select md5, sha256, score, mal_type, file_type, content, size, sensor_flags, file_name, rdate, udate
 		from pol_filehash_temp
 		on duplicate key update
 			sha256 = values(sha256),
@@ -444,7 +444,7 @@ func (i *Inputor) insertFileHash(path string) error {
 			content = values(content),
 			size = values(size),
 			sensor_flags = values(sensor_flags),
-			udate = values(udate);
+			udate = values(udate)
 	`
 
 	rs, err := o.Raw(query).Exec()
@@ -460,7 +460,7 @@ func (i *Inputor) insertFileName(path string) error {
 		LOAD DATA LOCAL INFILE '%s' REPLACE INTO TABLE pol_filename
 		FIELDS TERMINATED BY '\t' 
 		LINES TERMINATED BY '\n' 
-		(md5, name);
+		(md5, name)
 	`
 	query = fmt.Sprintf(query, filepath.ToSlash(path))
 	o := orm.NewOrm()
